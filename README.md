@@ -8,4 +8,4 @@ basado en:
  https://github.com/nickolay/esphome-lilygo-t547plus
 Oficial:
  https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
-# https://github.com/Xinyuan-LilyGO/LilyGo-EPD-4-7-OWM-Weather-Display
+ https://github.com/Xinyuan-LilyGO/LilyGo-EPD-4-7-OWM-Weather-Display
