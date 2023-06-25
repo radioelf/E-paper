@@ -148,7 +148,7 @@ sensor:
   # weather
   - platform: homeassistant
     entity_id: sensor.netatmo_casa_indoor_exterior_temperature
-    id: temperatura # temperatura interna
+    id: temperatura # temperatura externa
     internal: true
   - platform: wifi_signal
     name: "RF WiFi"
