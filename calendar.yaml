@@ -115,8 +115,8 @@ web_server:
 
 # localización 
 sun:
-  latitude: 42.040314°
-  longitude: 3.126695°
+  latitude: xx.040314°
+  longitude: xx.126695°
 
 time:                         # Configuración del componente de tiempo
   - platform: homeassistant   # Configuración de la plataforma Home Assistant para obtener la hora
