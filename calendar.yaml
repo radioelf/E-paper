@@ -83,7 +83,7 @@ logger:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "jM6PlSxi2Cefa0cCmZcmsl0Q0ySjlDCLy9v8hEpl/Ks="
+    key: "jM6PlSxi2Cefa0xxxxxxxxxxxxSjlDCLy9v8hEpl/Ks="
 ota:                              # Habilitar la actualización OTA (Over-The-Air)
   password: !secret ota_password  # Contraseña para proteger el acceso a la actualización
 #PCF8563 RTC
