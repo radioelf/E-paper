@@ -1,0 +1,451 @@
+# Es importante donde se llama a: esphome dashboard config/ ya que las rutas cambiaran
+# llamar desde /home se tiene que crear la carpeta boards en ~/config/.esphome/build/e-paper-plus
+# y colocar el fichero lilygo-t5-47-plus.json de la pagina ~/config/.esphome/build/e-paper-plus
+# https://github.com/esphome/feature-requests/issues/1109
+# basado en:
+# https://github.com/BeardedTinker/Home-Assistant_Config/blob/556c9a0157ef68a16640619b411599bc01adfc48/esphome/t5.yaml
+# https://www.youtube.com/watch?v=yftae61X4i8&t=1053s&ab_channel=BeardedTinker
+# https://github.com/nickolay/esphome-lilygo-t547plus
+#Oficial:
+# https://github.com/Xinyuan-LilyGO/LilyGo-EPD47
+# https://github.com/Xinyuan-LilyGO/LilyGo-EPD-4-7-OWM-Weather-Display
+
+#GPIO T5_47_PLUS ESP32-S3-WROOM-1-N16RB (PSRAM:8mB FLASH: 16mB)
+# Data
+#D7         GPIO_NUM_7
+#D6         GPIO_NUM_6
+#D5         GPIO_NUM_5
+#D4         GPIO_NUM_4
+#D3         GPIO_NUM_3
+#D2         GPIO_NUM_2
+#D1         GPIO_NUM_1
+#D0         GPIO_NUM_8
+# TF card
+#CKV        GPIO_NUM_38
+#STH        GPIO_NUM_40
+#CKH        GPIO_NUM_41
+# Config
+#CFG_DATA   GPIO_NUM_13 OUTPUT
+#CFG_CLK    GPIO_NUM_12 OUTPUT
+#CFG_STR    GPIO_NUM_0  OUTPUT
+# Aux.
+#BUTTON_1   GPIO_NUM_21
+#BATT_PIN   GPIO_NUM_14 ADC
+# SPI Touch (Pull-UP ON)
+#SD_MISO    GPIO_NUM_16
+#SD_MOSI    GPIO_NUM_15
+#SD_SCLK    GPIO_NUM_11
+#SD_CS      GPIO_NUM_42
+# PCF8563 RTC
+#I2C_SCL    GPIO_NUM_17
+#I2C_SDA    GPIO_NUM_18
+#I2C_INT    GPIO_NUM_47
+# SPI esclavo
+#GPIO_MISO  GPIO_NUM_45
+#GPIO_MOSI  GPIO_NUM_10
+#GPIO_SCLK  GPIO_NUM_48
+#GPIO_CS    GPIO_NUM_39
+# led azul conectado a la fuente de alimentación, hay la opción de apagar la fuente en el código fuente NO en EspHome
+
+substitutions:
+  esp_hostname: esp-Epaper  # Nombre de host para el dispositivo ESP
+  ip_address: 192.168.0.xx  # Dirección IP del dispositivo
+  ip_gw: 192.168.0.xx        # Puerta de enlace IP
+  ip_netmask: 255.255.252.0 # Máscara de subred IP
+  run_time: 1min            # Período en marcha
+  sleep_time: 20min         # Período en reposo
+    
+esphome:
+  name: e-paper-plus
+  friendly_name: e-paper-plus
+  project:
+    name: radioelf.e-paper  # Nombre del proyecto
+    version: "0.1"          # Versión del proyecto
+  platformio_options:
+    board_dir: boards
+    #incluir https://github.com/Xinyuan-LilyGO/LilyGo-EPD47/blob/master/platformio/boards/lilygo-t5-47-plus.json para placa personalizada
+    # ~/config/.esphome/build/e-paper-plus/boards<-lilygo-t5-47-plus.json
+    board: lilygo-t5-47-plus
+
+esp32:
+  variant: esp32s3
+  board: lilygo-t5-47-plus
+  framework:
+    type: arduino
+# Al igual que en <https://community.home-assistant.io/t/enable-usb-cdc-to-log-hello-world-to-esp32-s3-dev-board-for-esphome/463164/10>
+# Hay problemas con versiones más nuevas; la siguiente combinación funciona.
+   # version: 2.0.3
+   # platform_version: 5.1.1
+
+logger:
+  #level: DEBUG # VERY_VERBOSE  máximo
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: "jM6PlSxi2Cefa0cCmZcmsl0Q0ySjlDCLy9v8hEpl/Ks="
+ota:                              # Habilitar la actualización OTA (Over-The-Air)
+  password: !secret ota_password  # Contraseña para proteger el acceso a la actualización
+#PCF8563 RTC
+i2c:
+  sda: GPIO17
+  scl: GPIO18
+  # el escaneo falla...
+  scan: false
+  id: bus_RTC
+
+external_components:
+  - source: github://nickolay/esphome-lilygo-t547plus
+    components: ["t547"]
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  manual_ip:
+    static_ip: ${ip_address}
+    gateway: ${ip_gw}
+    subnet: ${ip_netmask}
+   # Habilitar punto de acceso alternativo (portal cautivo) en caso de que falle la conexión wifi
+  ap:
+    ssid: "E-Paper Hotspot"
+    password: !secret ap_password
+web_server:
+  port: 80
+  include_internal: true 
+
+# localización 
+sun:
+  latitude: 42.040314°
+  longitude: 3.126695°
+
+time:                         # Configuración del componente de tiempo
+  - platform: homeassistant   # Configuración de la plataforma Home Assistant para obtener la hora
+    id: ntp
+    timezone: Europe/Madrid   # Zona horaria, puede ser opcional y se puede des-comentar para configurarla
+    on_time_sync:             # Cuando se sincroniza la hora
+      - then:
+        - component.update: sunrise  # Actualiza el componente "sunrise"
+        - component.update: sunset   # Actualiza el componente "sunset"
+  - platform: homeassistant
+    id: esptime
+
+script:
+  - id: all_data_received
+    then:
+      - component.update: t5_display
+
+# sensores de Home assistant que obtendremos datos
+sensor:
+  # NO se puede usar ADC y Wifi conjuntamente
+  #- platform: adc
+  #  pin: GPIO14 
+  #  name: "Voltaje"
+  #  id: adc_volt
+  #  attenuation: 11db
+  #  update_interval: never
+  #  filters:
+  #    - multiply: 2
+  # weather
+  - platform: homeassistant
+    entity_id: sensor.netatmo_casa_indoor_exterior_temperature
+    id: temperatura # temperatura interna
+    internal: true
+  - platform: wifi_signal
+    name: "RF WiFi"
+    update_interval: 60s
+
+# interruptores
+switch:
+  - platform: template
+    name: "modo display"
+    id: modo
+    optimistic: true
+    on_turn_on:
+      - script.execute: all_data_received 
+    on_turn_off:
+      - script.execute: all_data_received 
+    lambda: return id(modo).state;
+  - platform: template
+    name: "Reset"
+    icon: "mdi:restart"
+    turn_on_action:
+      - lambda: |-
+          ESP.restart();
+# Sensores binarios
+binary_sensor:
+  - platform: gpio
+    pin: 
+      number: GPIO21      # GPIO21 en conector de la PCB
+      inverted: true
+    name: "Pulsador"
+    filters:
+      - delayed_on_off: 50ms
+    on_press:
+      then:
+        - switch.toggle: modo
+        - script.execute: all_data_received 
+
+# sensores información
+text_sensor:
+  # sol/luna
+  - platform: sun
+    id: sunrise
+    name: Salida del sol
+    type: sunrise
+    format: "%H:%M"
+    internal: true
+  - platform: sun
+    id: sunset
+    name: Puesta del sol
+    type: sunset
+    format: "%H:%M"    
+    internal: true
+  - platform: homeassistant
+    entity_id: sun.sun
+    id: sol
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.moon_phase
+    id: luna
+    internal: true
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+    ssid:
+      name: SSID
+    bssid:
+      name: BSSID
+    mac_address:
+      name: Mac Wifi
+    scan_results:
+      name: Scan Redes WIFI
+## -- ##
+# calendario
+  - platform: homeassistant
+    entity_id: calendar.calendario_hasio
+    attribute: message
+    id: evento_hasio
+    internal: true
+  - platform: homeassistant
+    entity_id: calendar.notificaciones
+    attribute: message
+    id: evento_calendario
+    internal: true
+  - platform: homeassistant
+    entity_id: calendar.notificaciones
+    attribute: start_time
+    id: aniversario
+    internal: true    
+  - platform: homeassistant
+    entity_id: calendar.calendario_hasio
+    id: aviso
+    internal: true 
+    on_value: # Acción a realizar una vez que se haya recibido los datos del último sensor
+      then:
+        - script.execute: all_data_received  
+          
+## Fuentes que usamos en la pantalla##
+# incluimos fichero configuración en carpeta /home/joan/config/ , en pc de Home Assistant /config/esphome/
+# Google Sans Medium
+# Google Sans Bold
+# https://github.com/sahibjotsaggu/Google-Sans-Fonts
+# Comprobar que el nombre del archivo coincide con el siguiente nombre
+# Material UI Icons - https://pictogrammers.github.io/@mdi/font/5.3.45/ 
+# https://github.com/Templarian/MaterialDesign-Webfont/blob/master/fonts/materialdesignicons-webfont.ttf
+font:
+  - file: "Roboto-Regular.ttf"
+    id: font_clock
+    size: 160
+    glyphs: |-
+      !"%()+=,-_.:°0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ abcdefghijklmnñopqrstuvwxyz'/&@|ÁÉÍÓÖŐÚÜŰáéíóöőúüű
+  - file: "Google_Sans_Medium.ttf"
+    id: font_big
+    size: 48
+    glyphs: |-
+      !"%()+=,-_.:°0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ abcdefghijklmnñopqrstuvwxyz'/&@|ÁÉÍÓÖŐÚÜŰáéíóöőúüű
+  - file: "Google_Sans_Medium.ttf"
+    id: font_large
+    size: 56
+    glyphs: |-
+      !"%()+=,-_.:°0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ abcdefghijklmnñopqrstuvwxyz'/&@|ÁÉÍÓÖŐÚÜŰáéíóöőúüű
+  - file: "Google_Sans_Medium.ttf"
+    id: font_max
+    size: 88
+    glyphs: |-
+      !"%()+=,-_.:°0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZ abcdefghijklmnñopqrstuvwxyz'/&@|ÁÉÍÓÖŐÚÜŰáéíóöőúüű
+  # material UI icons - from https://pictogrammers.github.io/@mdi/font/5.3.45/
+  - file: 'materialdesignicons-webfont.ttf'
+    id: font_icons_small
+    size: 50
+    glyphs:
+      # fases lunares
+      - "\U000F0F61" # primera-cuarta-luna
+      - "\U000F0F62" # luna-llena
+      - "\U000F0F63" # última-cuarta-luna
+      - "\U000F0F64" # luna-nueva
+      - "\U000F0F65" # creciente-menguante
+      - "\U000F0F66" # gibosa-menguante
+      - "\U000F0F67" # creciente-creciente
+      - "\U000F0F68" # gibosa-creciente
+      # icons
+      - "\U000F00ED" # calendario
+      - "\U000F009E" # aviso ON
+  - file: 'materialdesignicons-webfont.ttf'
+    id: font_icons_tiny
+    size: 60
+    glyphs:
+      - "\U000F009E" # aviso ON
+      - "\U000F0A91" # aviso OFF
+      - "\U000F059C" # amanecer
+      - "\U000F059B" # atardecer
+
+display:
+  - platform: t547
+    id: t5_display
+    rotation: 0
+    update_interval: 1h
+    lambda: |-
+      // iconos
+      #define ICON_sunrise          "\U000F059C"
+      #define ICON_sunset           "\U000F059B"
+      #define ICON_calendar         "\U000F00ED"
+      #define ICON_alarm_on         "\U000F009E"
+      #define ICON_alarm_off        "\U000F0A91"
+      // constantes de posicionamiento
+      #define xRes 960              // horizontal
+      #define yRes 540              // vertical
+      #define xCenter (xRes/2 + 40) // X posicion central horizontal
+      #define yCenter (yRes/2)      // Y posicion central vertical
+      #define pad 10
+      
+      const char* months[] = {"Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"};
+      const char* weekdays[] = {"Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"};
+      const char* dias_semana[] = {"Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"};
+
+      if (id(modo).state) { 
+        int y = 0;
+        auto time = id(ntp).now();   
+        auto fecha_actual = id(esptime).now();
+        int anyo = fecha_actual.year;
+        int mes = fecha_actual.month -1 ;
+        int dia = fecha_actual.day_of_week -1;
+        it.printf(pad, 20, id(font_big), TextAlign::CENTER_LEFT, "Evento:");
+        it.printf(pad + 190, 20, id(font_large), TextAlign::CENTER_LEFT, "%.35s", id(evento_hasio).state.c_str());
+        it.strftime(xCenter, 120, id(font_clock), TextAlign::CENTER, months[fecha_actual.month], time);
+        it.strftime(xCenter, yCenter -10, id(font_clock), TextAlign::CENTER, weekdays[dia], time);
+        it.strftime(xCenter, 415, id(font_clock), TextAlign::CENTER, "%d/%m/%y", id(esptime).now());
+        y = 500;
+        it.printf(pad, y, id(font_icons_small), TextAlign::CENTER_LEFT, ICON_calendar); 
+        it.printf(pad + 80, y, id(font_big), TextAlign::CENTER_LEFT, "%.35s", id(evento_calendario).state.c_str());
+        size_t eventoLength = strlen(id(evento_calendario).state.c_str());
+        int xOffset = eventoLength * 30;
+        char formattedDate[11];  // Buffer para almacenar la fecha formateada
+        snprintf(formattedDate, sizeof(formattedDate), "%.2s/%.2s/%.2s", &id(aniversario).state.c_str()[8], &id(aniversario).state.c_str()[5], &id(aniversario).state.c_str()[2]);
+        it.printf(pad + 80 + xOffset, y, id(font_big), TextAlign::CENTER_LEFT, "%s", formattedDate);
+        y = 150;
+        // Aviso
+        if (id(aviso).state == "on") {
+          it.printf(80, y, id(font_icons_tiny), TextAlign::BASELINE_RIGHT, ICON_alarm_on);
+        }
+        else {
+          it.printf(80, y, id(font_icons_tiny), TextAlign::BASELINE_RIGHT, ICON_alarm_off);
+        }
+        y = 250;
+        // sol
+        it.printf(60, y, id(font_icons_tiny), TextAlign::BASELINE_RIGHT, ICON_sunrise);
+        it.printf(60 + 8, y, id(font_big), TextAlign::BASELINE_LEFT, "%s", id(sunrise).state.c_str());      
+        it.printf(60, y + 55, id(font_icons_tiny), TextAlign::BASELINE_RIGHT, ICON_sunset);
+        it.printf(60 + 8 , y + 55, id(font_big), TextAlign::BASELINE_LEFT, "%s", id(sunset).state.c_str()); 
+        // Fases lunares
+        auto moonIcon = id(luna).state;
+        if (moonIcon == "new_moon") moonIcon = "\U000F0F64";
+        else if (moonIcon == "waxing_crescent")  moonIcon = "\U000F0F67";
+        else if (moonIcon == "first_quarter") moonIcon = "\U000F0F61";
+        else if (moonIcon == "waxing_gibbous") moonIcon = "\U000F0F68";
+        else if (moonIcon == "full_moon") moonIcon = "\\U000F0F62";
+        else if (moonIcon == "waning_gibbous") moonIcon = "\U000F0F66";
+        else if (moonIcon == "last_quarter") moonIcon = "\U000F0F63";
+        else if (moonIcon == "waning_crescent") moonIcon = "\U000F0F65";
+        it.printf(60, y + 75, id(font_icons_small), TextAlign::TOP_RIGHT, moonIcon.c_str()); 
+      } else {
+        auto time = id(ntp).now();
+        auto fecha_actual = id(esptime).now();
+        int anyo = fecha_actual.year;
+        int mes = fecha_actual.month;
+        int hoy = fecha_actual.day_of_month;
+        int dia = 1;
+
+        struct tm tm;
+        tm.tm_year = anyo - 1900;
+        tm.tm_mon = mes - 1;
+        tm.tm_mday = dia;
+        tm.tm_hour = 0;
+        tm.tm_min = 0;
+        tm.tm_sec = 0;
+        mktime(&tm);
+
+        int dia_inicio_semana = tm.tm_wday; // Día de la semana en el que comienza el mes (1 al 7)
+        int posicion_x = 20;  // Posición x para mostrar las líneas
+        int posicion_y = 100;  // Posición y para mostrar las líneas
+        int ultimo_dia_mes;
+
+        it.strftime(xCenter, 45, id(font_large), TextAlign::CENTER, months[fecha_actual.month - 1], time);
+        if (mes == 2) {
+          // Si es febrero, verifica si es bisiesto
+          if ((anyo % 4 == 0 && anyo % 100 != 0) || (anyo % 400 == 0)) {
+            ultimo_dia_mes = 29;  // bisiesto
+          } else {
+            ultimo_dia_mes = 28;  // no bisiesto
+          }
+        } else if (mes == 4 || mes == 6 || mes == 9 || mes == 11) {
+          ultimo_dia_mes = 30;  // Meses con 30 días
+        } else {
+          ultimo_dia_mes = 31;  // Meses con 31 días
+        }
+        // Mostrar los días de la semana
+        for (int i = 0; i < 7; i++) {
+          it.printf(posicion_x, posicion_y, id(font_large), TextAlign::CENTER_LEFT, "%s ", dias_semana[i]);
+          posicion_x += 130;  // Incrementar la posición x para el siguiente día de la semana
+        }
+        posicion_x = 40;
+        posicion_y = 160;    // Incrementar la posición y para la siguiente línea
+        // Construir y mostrar las líneas del calendario
+        while (dia <= ultimo_dia_mes) {
+          for (int i = 0; i < 6; i++) {
+            for (int j = 0; j < 7; j++) {
+              if (i == 0 && j < dia_inicio_semana - 1) {
+                it.printf(posicion_x, posicion_y, id(font_large), TextAlign::CENTER_LEFT, "        ");  // Espacios para los días previos al inicio del mes
+              } else if (dia <= ultimo_dia_mes) {
+                if (dia < 10) {
+                  it.printf(posicion_x, posicion_y, id(font_large), TextAlign::CENTER_LEFT, "   ");    // Espacio adicional para los números de un solo dígito
+                }
+                if (dia_inicio_semana > 5) {
+                  if ((dia + dia_inicio_semana) == (30 + dia_inicio_semana)) {
+                    posicion_x = 10;
+                    posicion_y = 160;  
+                  } else if ((dia + dia_inicio_semana) == (31 + dia_inicio_semana)) {
+                    posicion_x = 150;
+                    posicion_y = 160; 
+                  }
+                }
+                if (hoy == dia) {
+                  it.printf(posicion_x + 10, posicion_y, id(font_max), TextAlign::CENTER_LEFT, "%d ", dia);
+                  if (id(aviso).state == "on") {
+                    it.printf(posicion_x + 15, posicion_y + 20, id(font_icons_small), TextAlign::BASELINE_RIGHT, ICON_alarm_on);
+                  }
+                }
+                else {
+                  it.printf(posicion_x + 30, posicion_y, id(font_large), TextAlign::CENTER_LEFT, "%d ", dia);
+                }
+                dia++;
+              }
+              if (dia > ultimo_dia_mes) {
+                break;  // Salir del bucle cuando se han mostrado todos los días del mes
+              }
+              posicion_x += 130;  // Incrementar la posición x para el siguiente día
+            }
+            posicion_x = 40;     // Reiniciar la posición x al comienzo de la línea
+            posicion_y += 85;    // Incrementar la posición y para la siguiente línea
+          }
+        }
+      }
